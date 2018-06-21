@@ -11,18 +11,15 @@ import (
 const inputdelimiter = '\n'
 
 func main() {
-	reader := bufio.NewReader(os.Stdin)
+	scanner := bufio.NewScanner(os.Stdin)
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 
-	for {
-		input, err := reader.ReadString(inputdelimiter)
-		if checkError(err) {
-			data := map[string]interface{}{}
-			dec := json.NewDecoder(strings.NewReader(input))
-			if checkError(dec.Decode(&data)) {
-				enc.Encode(data)
-			}
+	for scanner.Scan() {
+		data := map[string]interface{}{}
+		dec := json.NewDecoder(strings.NewReader(scanner.Text()))
+		if checkError(dec.Decode(&data)) {
+			enc.Encode(data)
 		}
 	}
 }
