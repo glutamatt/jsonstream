@@ -8,8 +8,6 @@ import (
 	"strings"
 )
 
-const inputdelimiter = '\n'
-
 func main() {
 	scanner := bufio.NewScanner(os.Stdin)
 	enc := json.NewEncoder(os.Stdout)
