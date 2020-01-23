@@ -15,18 +15,19 @@ func main() {
 
 	for scanner.Scan() {
 		data := map[string]interface{}{}
-		dec := json.NewDecoder(strings.NewReader(scanner.Text()))
-		if checkError(dec.Decode(&data)) {
+		js := scanner.Text()
+		dec := json.NewDecoder(strings.NewReader(js))
+		if checkError(dec.Decode(&data), js) {
 			enc.Encode(data)
 		}
 	}
 }
 
-func checkError(e error) bool {
+func checkError(e error, js string) bool {
 	if e == nil {
 		return true
 	}
-	println("error")
-	fmt.Println(e)
+
+	fmt.Fprintf(os.Stderr, "Json error: %v\nfrom string:\n%s\n", e, js)
 	return false
 }
