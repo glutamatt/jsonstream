@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"runtime"
-	"sync"
 )
 
 type Line struct {
@@ -14,29 +13,28 @@ type Line struct {
 	lineNumber int
 }
 
+type Formatted struct {
+	stdout, stderr string
+}
+
 func main() {
 	scanner := bufio.NewScanner(os.Stdin)
-
 	lineNumber := 0
+	formattedLines := make(chan chan Formatted, runtime.NumCPU())
 
-	lines := make(chan Line)
-	formatted := make(chan []byte)
-
-	wg := sync.WaitGroup{}
-	workers := runtime.NumCPU()
-	wg.Add(workers)
-	for i := 0; i < workers; i++ {
-		go func() {
-			for l := range lines {
-				data := map[string]interface{}{}
-				if checkError(json.Unmarshal(l.data, &data), l.data, l.lineNumber) {
-					if b, err := json.MarshalIndent(data, "", " "); err == nil {
-						formatted <- b
-					}
-				}
-			}
-			wg.Done()
-		}()
+	process := func(line Line, out chan<- Formatted) {
+		data := map[string]interface{}{}
+		err := json.Unmarshal(line.data, &data)
+		if err != nil {
+			out <- Formatted{stderr: errorMessage(err, "json.Unmarshal", line)}
+			return
+		}
+		b, err := json.MarshalIndent(data, "", " ")
+		if err != nil {
+			out <- Formatted{stderr: errorMessage(err, "json.MarshalIndent", line)}
+			return
+		}
+		out <- Formatted{stdout: string(b) + "\n"}
 	}
 
 	go func() {
@@ -45,24 +43,23 @@ func main() {
 			b := scanner.Bytes()
 			c := make([]byte, len(b))
 			copy(c, b)
-			lines <- Line{lineNumber: lineNumber, data: c}
+			form := make(chan Formatted)
+			formattedLines <- form
+			go process(Line{lineNumber: lineNumber, data: c}, form)
 		}
-		close(lines)
-		wg.Wait()
-		close(formatted)
+		close(formattedLines)
 	}()
 
-	for f := range formatted {
-		os.Stdout.Write(f)
-		os.Stdout.WriteString("\n")
+	for f := range formattedLines {
+		formatted := <-f
+		if formatted.stderr != "" {
+			os.Stderr.WriteString(formatted.stderr)
+		} else {
+			os.Stdout.WriteString(formatted.stdout)
+		}
 	}
 }
 
-func checkError(e error, js []byte, lineNumber int) bool {
-	if e == nil {
-		return true
-	}
-
-	fmt.Fprintf(os.Stderr, "Json error at line %d : %v\nfrom string:\n%s\n", lineNumber, e, string(js))
-	return false
+func errorMessage(err error, method string, line Line) string {
+	return fmt.Sprintf("%s error at line %d : %v ; input string: '%s'\n", method, line.lineNumber, err, string(line.data))
 }
